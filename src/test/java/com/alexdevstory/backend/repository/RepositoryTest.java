@@ -1,7 +1,10 @@
 package com.alexdevstory.backend.repository;
 
+import com.alexdevstory.backend.entity.BlogImage;
 import com.alexdevstory.backend.entity.BlogPost;
 import com.alexdevstory.backend.entity.BlogTag;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
@@ -15,11 +18,50 @@ import static org.assertj.core.api.Assertions.*;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 class RepositoryTest {
+    @PersistenceContext
+    EntityManager em;
+
     @Autowired
     BlogPostRepository blogPostRepository;
 
     @Autowired
     BlogTagRepository blogTagRepository;
+
+    @Autowired
+    BlogImageRepository blogImageRepository;
+
+    @Test
+    void blogPostRepositoryTimerTest() throws InterruptedException {
+        BlogPost post = BlogPost.builder()
+                .title("test title")
+                .content("test content")
+                .build();
+
+        BlogPost savedPost = blogPostRepository.save(post);
+        assertThat(savedPost.getCreatedDate()).isNotNull();
+        assertThat(savedPost.getLastModifiedDate()).isNotNull();
+        assertThat(savedPost.getCreatedDate()).isEqualTo(savedPost.getLastModifiedDate());
+
+        System.out.println("savedPost.getId() = " + savedPost.getId());
+        System.out.println("savedPost.getTitle() = " + savedPost.getTitle());
+        System.out.println("savedPost.getContent() = " + savedPost.getContent());
+        System.out.println("savedPost.getCreatedDate() = " + savedPost.getCreatedDate());
+        System.out.println("savedPost.getLastModifiedDate() = " + savedPost.getLastModifiedDate());
+
+        //업데이트 시간이 정확한지 확인하기
+        Thread.sleep(3000);
+        BlogPost modifiedPost = savedPost.editBlogPost("updated title", "updated content");
+        em.flush();
+//        BlogPost modifiedPost = blogPostRepository.save(savedPost);
+        assertThat(modifiedPost.getLastModifiedDate()).isNotNull();
+        assertThat(modifiedPost.getLastModifiedDate()).isAfter(modifiedPost.getCreatedDate());
+
+        System.out.println("modifiedPost.getId() = " + modifiedPost.getId());
+        System.out.println("modifiedPost.getTitle() = " + modifiedPost.getTitle());
+        System.out.println("modifiedPost.getContent() = " + modifiedPost.getContent());
+        System.out.println("modifiedPost.getCreatedDate() = " + modifiedPost.getCreatedDate());
+        System.out.println("modifiedPost.getLastModifiedDate() = " + modifiedPost.getLastModifiedDate());
+    }
 
     @Test
     void blogPostRepositoryTest() {
@@ -100,4 +142,42 @@ class RepositoryTest {
         assertThat(findSecondTag.get().getTag()).isEqualTo(secondTag.getTag());
     }
 
+    @Test
+    void blogImageRepositoryTest() {
+        BlogPost savedPost = BlogPost.builder()
+                .title("Test Post")
+                .content("This is a test post")
+                .build();
+
+        BlogImage blogImage1 = BlogImage.builder()
+                .imageData("image1".getBytes())
+                .fileName("image1/jpg")
+                .contentType("image/jpeg")
+                .blogPost(savedPost)
+                .build();
+
+        BlogImage blogImage2 = BlogImage.builder()
+                .imageData("image2".getBytes())
+                .fileName("image2/jpg")
+                .contentType("image/jpeg")
+                .blogPost(savedPost)
+                .build();
+
+        blogImageRepository.save(blogImage1);
+        blogImageRepository.save(blogImage2);
+
+        blogPostRepository.save(savedPost);
+
+        //findBlogImagesByPostTitle 기능 검증하기
+        List<BlogImage> findImages = blogImageRepository.findBlogImagesByPostTitle(savedPost.getTitle());
+
+        assertThat(findImages).isNotNull();
+        assertThat(findImages).hasSize(2);
+        assertThat(findImages.get(0).getBlogPost().getTitle()).isEqualTo(savedPost.getTitle());
+        assertThat(findImages.get(1).getBlogPost().getTitle()).isEqualTo(savedPost.getTitle());
+        assertThat(findImages.get(0).getImageData()).isIn(blogImage1.getImageData(), blogImage2.getImageData());
+        assertThat(findImages.get(1).getImageData()).isIn(blogImage1.getImageData(), blogImage2.getImageData());
+        assertThat(findImages.get(0).getFileName()).isIn(blogImage1.getFileName(), blogImage2.getFileName());
+        assertThat(findImages.get(1).getFileName()).isIn(blogImage1.getFileName(), blogImage2.getFileName());
+    }
 }
