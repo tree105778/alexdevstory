@@ -1,23 +1,19 @@
 package com.alexdevstory.backend.repository;
 
-import com.alexdevstory.backend.entity.BlogImage;
 import com.alexdevstory.backend.entity.BlogPost;
 import com.alexdevstory.backend.entity.BlogTag;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
-import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 
 import java.util.List;
 import java.util.Optional;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.*;
 
-@DataJpaTest
-@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-class RepositoryTest {
+class BlogPostRepositoryTest {
     @PersistenceContext
     EntityManager em;
 
@@ -127,57 +123,5 @@ class RepositoryTest {
         assertThat(postsWithSecondTag).hasSize(1);
         assertThat(postsWithSecondTag.get(0).getTitle()).isEqualTo(firstPost.getTitle());
         assertThat(postsWithSecondTag.get(0).getContent()).isEqualTo(firstPost.getContent());
-    }
-
-    @Test
-    void blogTagRepositoryTest() {
-        BlogTag firstTag = blogTagRepository.save(new BlogTag("first tag"));
-        BlogTag secondTag = blogTagRepository.save(new BlogTag("second tag"));
-
-        //블로그 테그 리포지토리에서 가져온 BlogTag가 저장한 원본과 동일한 지 검증
-        Optional<BlogTag> findFirstTag = blogTagRepository.findByTag(firstTag.getTag());
-        assertThat(findFirstTag.get().getTag()).isEqualTo(firstTag.getTag());
-
-        Optional<BlogTag> findSecondTag = blogTagRepository.findByTag(secondTag.getTag());
-        assertThat(findSecondTag.get().getTag()).isEqualTo(secondTag.getTag());
-    }
-
-    @Test
-    void blogImageRepositoryTest() {
-        BlogPost savedPost = BlogPost.builder()
-                .title("Test Post")
-                .content("This is a test post")
-                .build();
-
-        BlogImage blogImage1 = BlogImage.builder()
-                .imageData("image1".getBytes())
-                .fileName("image1/jpg")
-                .contentType("image/jpeg")
-                .blogPost(savedPost)
-                .build();
-
-        BlogImage blogImage2 = BlogImage.builder()
-                .imageData("image2".getBytes())
-                .fileName("image2/jpg")
-                .contentType("image/jpeg")
-                .blogPost(savedPost)
-                .build();
-
-        blogImageRepository.save(blogImage1);
-        blogImageRepository.save(blogImage2);
-
-        blogPostRepository.save(savedPost);
-
-        //findBlogImagesByPostTitle 기능 검증하기
-        List<BlogImage> findImages = blogImageRepository.findBlogImagesByPostTitle(savedPost.getTitle());
-
-        assertThat(findImages).isNotNull();
-        assertThat(findImages).hasSize(2);
-        assertThat(findImages.get(0).getBlogPost().getTitle()).isEqualTo(savedPost.getTitle());
-        assertThat(findImages.get(1).getBlogPost().getTitle()).isEqualTo(savedPost.getTitle());
-        assertThat(findImages.get(0).getImageData()).isIn(blogImage1.getImageData(), blogImage2.getImageData());
-        assertThat(findImages.get(1).getImageData()).isIn(blogImage1.getImageData(), blogImage2.getImageData());
-        assertThat(findImages.get(0).getFileName()).isIn(blogImage1.getFileName(), blogImage2.getFileName());
-        assertThat(findImages.get(1).getFileName()).isIn(blogImage1.getFileName(), blogImage2.getFileName());
     }
 }
