@@ -2,6 +2,7 @@ package com.alexdevstory.backend.service;
 
 import com.alexdevstory.backend.dto.BlogImageDTO;
 import com.alexdevstory.backend.dto.BlogPostDTO;
+import com.alexdevstory.backend.dto.BlogPostSummaryAndPageDTO;
 import com.alexdevstory.backend.dto.BlogPostSummaryDTO;
 import com.alexdevstory.backend.entity.BlogImage;
 import com.alexdevstory.backend.entity.BlogPost;
@@ -10,6 +11,9 @@ import com.alexdevstory.backend.exception.BlogPostNotFoundException;
 import com.alexdevstory.backend.repository.BlogPostRepository;
 import com.alexdevstory.backend.repository.BlogTagRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Example;
+import org.springframework.data.domain.ExampleMatcher;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -61,24 +65,74 @@ public class BlogPostService {
 
         blogPostRepository.save(blogPost);
 
-        return convertToDTO(blogPost);
+        return convertToBlogPostDTO(blogPost);
     }
 
+    public Page<BlogPostSummaryDTO> getBlogPostsBySearchCond(String keyword, Pageable pageable) {
+        BlogPost blogPost = BlogPost.builder()
+                .title(keyword)
+                .content(keyword)
+                .build();
 
-    public List<BlogPostSummaryDTO> getAllBlogPostSummary(Pageable pageable) {
-        return blogPostRepository.findAll(pageable).stream()
-                .map(blogPost -> new BlogPostSummaryDTO(blogPost.getTitle(), blogPost.getContent()))
-                .collect(Collectors.toList());
+        ExampleMatcher matcher = ExampleMatcher.matchingAny()
+                .withMatcher("title", match -> match.contains().ignoreCase())
+                .withMatcher("content", match -> match.contains().ignoreCase());
+
+        return blogPostRepository.findAll(Example.of(blogPost, matcher), pageable)
+                .map(post -> new BlogPostSummaryDTO(post.getTitle(), post.getContent()));
+    }
+
+    public BlogPostSummaryAndPageDTO getBlogPostsByTags(List<String> tags, Pageable pageable) {
+        Page<BlogPost> blogPostsPage = blogPostRepository.findBlogPostsByTags(tags, pageable);
+
+        return convertToBlogPostSummaryAndPageDTO(blogPostsPage);
+    }
+
+    public BlogPostSummaryAndPageDTO getAllBlogPostSummary(Pageable pageable) {
+        Page<BlogPost> findPagePost = blogPostRepository.findAll(pageable);
+
+        return convertToBlogPostSummaryAndPageDTO(findPagePost);
     }
 
     public BlogPostDTO getBlogPost(String title) {
         BlogPost blogPost = blogPostRepository.findByTitle(title).orElseThrow(
                 () -> new BlogPostNotFoundException("No Blog Post title:" + title));
 
-        return convertToDTO(blogPost);
+        return convertToBlogPostDTO(blogPost);
     }
 
-    private BlogPostDTO convertToDTO(BlogPost blogPost) {
+    @Transactional
+    public boolean deleteBlogPost(String title) {
+        BlogPost findPost = blogPostRepository.findByTitle(title).orElseThrow(
+                () -> new BlogPostNotFoundException("No Blog Post title:" + title));
+        blogPostRepository.delete(findPost);
+
+        return true;
+    }
+
+    private BlogPostSummaryAndPageDTO convertToBlogPostSummaryAndPageDTO(Page<BlogPost> findPagePost) {
+        int totalPage = findPagePost.getTotalPages();
+        long totalElements = findPagePost.getTotalElements();
+        int currentPage = findPagePost.getNumber();
+        int numberOfCurrentElements = findPagePost.getNumberOfElements();
+
+        List<BlogPostSummaryDTO> summaries = findPagePost.stream()
+                .map(blogPost -> BlogPostSummaryDTO.builder()
+                        .title(blogPost.getTitle())
+                        .summary(blogPost.getContent())
+                        .build())
+                .collect(Collectors.toList());
+
+        return BlogPostSummaryAndPageDTO.builder()
+                .totalElements(totalElements)
+                .totalPage(totalPage)
+                .currentPage(currentPage)
+                .numberOfCurrentElements(numberOfCurrentElements)
+                .summaries(summaries)
+                .build();
+    }
+
+    private BlogPostDTO convertToBlogPostDTO(BlogPost blogPost) {
         List<String> tagList = blogPost.getTags().stream()
                 .sorted(Comparator.comparing(postTag -> postTag.getTag().getTag()))
                 .map(postTag -> postTag.getTag().getTag())
@@ -100,14 +154,6 @@ public class BlogPostService {
                 .build();
     }
 
-    @Transactional
-    public boolean deleteBlogPost(String title) {
-        BlogPost findPost = blogPostRepository.findByTitle(title).orElseThrow(
-                () -> new BlogPostNotFoundException("No Blog Post title:" + title));
-        blogPostRepository.delete(findPost);
-
-        return true;
-    }
 
     private void imageUpdate(BlogPostDTO editBlogPostDTO, BlogPost blogPost) {
         blogPost.getImages().clear();

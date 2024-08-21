@@ -6,13 +6,19 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
+import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.*;
 
+@DataJpaTest
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 class BlogPostRepositoryTest {
     @PersistenceContext
     EntityManager em;
@@ -123,5 +129,28 @@ class BlogPostRepositoryTest {
         assertThat(postsWithSecondTag).hasSize(1);
         assertThat(postsWithSecondTag.get(0).getTitle()).isEqualTo(firstPost.getTitle());
         assertThat(postsWithSecondTag.get(0).getContent()).isEqualTo(firstPost.getContent());
+    }
+
+    @Test
+    void findAllByPageable() {
+        List<BlogPost> blogPosts = new ArrayList<>(40);
+        BlogTag tag1 = blogTagRepository.save(new BlogTag("tag1"));
+        BlogTag tag2 = blogTagRepository.save(new BlogTag("tag2"));
+        for (int i = 1; i <= 40; i++) {
+            BlogPost blogPost = BlogPost.builder()
+                    .title("test title" + i)
+                    .content("test content" + i)
+                    .build();
+            blogPost.addTag(tag1);
+            if (i % 2 == 0) {
+                blogPost.addTag(tag2);
+            }
+            blogPosts.add(blogPostRepository.save(blogPost));
+        }
+
+        Page<BlogPost> result = blogPostRepository.findAll(PageRequest.of(0, 8));
+
+        assertThat(result).hasSize(8);
+        assertThat(result.getContent()).containsExactlyElementsOf(blogPosts.subList(0, 8));
     }
 }
