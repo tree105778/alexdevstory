@@ -102,11 +102,11 @@ class BlogPostServiceTest {
         when(blogPostRepository.findAll(any(Example.class), any(Pageable.class)))
                 .thenReturn(new PageImpl(List.of(blogPost)));
 
-        List<BlogPostSummaryDTO> results = blogPostService.getBlogPostsBySearchCond("test", pageable).getContent();
+        BlogPostSummaryAndPageDTO results = blogPostService.getBlogPostsBySearchCond("test", pageable);
 
-        assertThat(results).hasSize(1);
-        assertThat(results.get(0).getTitle()).isEqualTo(blogPost.getTitle());
-        assertThat(results.get(0).getSummary()).isEqualTo(blogPost.getContent());
+        assertThat(results.getSummaries()).hasSize(1);
+        assertThat(results.getSummaries().get(0).getTitle()).isEqualTo(blogPost.getTitle());
+        assertThat(results.getSummaries().get(0).getSummary()).isEqualTo(blogPost.getContent());
 
         verify(blogPostRepository, times(1)).findAll(any(Example.class), any(Pageable.class));
     }
@@ -160,9 +160,8 @@ class BlogPostServiceTest {
     void deleteBlogPost() {
         when(blogPostRepository.findByTitle(anyString())).thenReturn(Optional.of(blogPost));
 
-        boolean isDeleted = blogPostService.deleteBlogPost(blogPost.getTitle());
+        blogPostService.deleteBlogPost(blogPost.getTitle());
 
-        assertThat(isDeleted).isTrue();
         verify(blogPostRepository, times(1)).delete(any(BlogPost.class));
     }
 }

@@ -1,13 +1,12 @@
 package com.alexdevstory.backend.service;
 
-import com.alexdevstory.backend.dto.BlogImageDTO;
-import com.alexdevstory.backend.dto.BlogPostDTO;
-import com.alexdevstory.backend.dto.BlogPostSummaryAndPageDTO;
-import com.alexdevstory.backend.dto.BlogPostSummaryDTO;
+import com.alexdevstory.backend.dto.*;
 import com.alexdevstory.backend.entity.BlogImage;
 import com.alexdevstory.backend.entity.BlogPost;
 import com.alexdevstory.backend.entity.BlogTag;
+import com.alexdevstory.backend.exception.BlogPostDeletionException;
 import com.alexdevstory.backend.exception.BlogPostNotFoundException;
+import com.alexdevstory.backend.exception.ImageProcessingException;
 import com.alexdevstory.backend.repository.BlogPostRepository;
 import com.alexdevstory.backend.repository.BlogTagRepository;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +16,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -41,6 +42,7 @@ public class BlogPostService {
                     .orElseGet(() -> blogTagRepository.save(new BlogTag(tag)));
             post.addTag(blogTag);
         });
+
         blogPostDTO.getImages().forEach(image -> {
             BlogImage blogImage = BlogImage.builder()
                     .imageData(image.getImageData())
@@ -68,7 +70,7 @@ public class BlogPostService {
         return convertToBlogPostDTO(blogPost);
     }
 
-    public Page<BlogPostSummaryDTO> getBlogPostsBySearchCond(String keyword, Pageable pageable) {
+    public BlogPostSummaryAndPageDTO getBlogPostsBySearchCond(String keyword, Pageable pageable) {
         BlogPost blogPost = BlogPost.builder()
                 .title(keyword)
                 .content(keyword)
@@ -78,8 +80,9 @@ public class BlogPostService {
                 .withMatcher("title", match -> match.contains().ignoreCase())
                 .withMatcher("content", match -> match.contains().ignoreCase());
 
-        return blogPostRepository.findAll(Example.of(blogPost, matcher), pageable)
-                .map(post -> new BlogPostSummaryDTO(post.getTitle(), post.getContent()));
+        Page<BlogPost> blogPostsPage = blogPostRepository.findAll(Example.of(blogPost, matcher), pageable);
+
+        return convertToBlogPostSummaryAndPageDTO(blogPostsPage);
     }
 
     public BlogPostSummaryAndPageDTO getBlogPostsByTags(List<String> tags, Pageable pageable) {
@@ -102,12 +105,14 @@ public class BlogPostService {
     }
 
     @Transactional
-    public boolean deleteBlogPost(String title) {
+    public void deleteBlogPost(String title) {
         BlogPost findPost = blogPostRepository.findByTitle(title).orElseThrow(
                 () -> new BlogPostNotFoundException("No Blog Post title:" + title));
-        blogPostRepository.delete(findPost);
-
-        return true;
+        try {
+            blogPostRepository.delete(findPost);
+        } catch (Exception e) {
+            throw new BlogPostDeletionException("Failed to delete blog post with title: " + title, e);
+        }
     }
 
     private BlogPostSummaryAndPageDTO convertToBlogPostSummaryAndPageDTO(Page<BlogPost> findPagePost) {
@@ -190,6 +195,31 @@ public class BlogPostService {
                             .orElseGet(() -> blogTagRepository.save(new BlogTag(tag)));
                     blogPost.addTag(blogTag);
                 });
+    }
+
+    public BlogPostDTO convertToBlogPostDTO(
+            BlogPostFormDTO blogPostFormDTO, List<MultipartFile> imageFiles) {
+        BlogPostDTO blogPostDTO = BlogPostDTO.builder()
+                .title(blogPostFormDTO.getTitle())
+                .content(blogPostFormDTO.getContent())
+                .tags(blogPostFormDTO.getTags())
+                .build();
+
+        List<BlogImageDTO> blogImageDTOList = imageFiles.stream()
+                .map(file -> {
+                    try {
+                        return BlogImageDTO.builder()
+                                .imageData(file.getBytes())
+                                .fileName(file.getOriginalFilename())
+                                .contentType(file.getContentType())
+                                .build();
+                    } catch (IOException e) {
+                        throw new ImageProcessingException("Error while processing image file", e);
+                    }
+                }).collect(Collectors.toList());
+
+        blogPostDTO.setImages(blogImageDTOList);
+        return blogPostDTO;
     }
 }
 
